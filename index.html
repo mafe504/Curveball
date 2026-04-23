@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -78,7 +79,7 @@
             <button class="w-full text-left px-4 py-3 text-gray-500 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 opacity-50 cursor-not-allowed" title="Coming soon">
                 <i data-lucide="users" class="w-4 h-4"></i> AI Boss Feed
             </button>
-            <button class="w-full text-left px-4 py-3 text-gray-500 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 opacity-50 cursor-not-allowed" title="Coming soon">
+            <button class="w-full text-left px-4 py-3 text-gray-500 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 opacity-50 cursor-not-allowed" title="Settings Disabled in Local Mode">
                 <i data-lucide="settings" class="w-4 h-4"></i> Settings
             </button>
         </nav>
@@ -88,7 +89,7 @@
                 <div class="w-10 h-10 rounded-full placeholder-img">User</div>
                 <div>
                     <div class="text-sm font-bold text-gray-800">Student Access</div>
-                    <div class="text-xs text-gray-500">v1.2.0 // Active</div>
+                    <div class="text-xs text-gray-500">v1.3.1 // Active</div>
                 </div>
             </div>
         </div>
@@ -256,11 +257,12 @@
         // Initialize Icons
         lucide.createIcons();
 
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
         // Application State
         let projectData = "";
         let currentCurveball = "";
-        let uploadedFileBase64 = null;
-        let uploadedFileMime = null;
         let uploadedFileExtractedText = "";
 
         // UI Elements
@@ -336,7 +338,7 @@
             document.getElementById('historyModal').classList.add('hidden');
         }
 
-        // --- FILE UPLOAD LOGIC ---
+        // --- FILE UPLOAD LOGIC (Client-side Text Extraction) ---
         fileUpload.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -347,19 +349,29 @@
 
             if (file.type === 'application/pdf') {
                 const reader = new FileReader();
-                reader.onload = (event) => {
-                    uploadedFileBase64 = event.target.result.split(',')[1];
-                    uploadedFileMime = file.type;
-                    uploadedFileExtractedText = ""; 
+                reader.onload = async (event) => {
+                    try {
+                        const typedarray = new Uint8Array(event.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let text = "";
+                        for (let i = 1; i <= pdf.numPages && i <= 8; i++) { 
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            text += content.items.map(item => item.str).join(' ') + "\n";
+                        }
+                        uploadedFileExtractedText = text;
+                    } catch (err) {
+                        console.error("PDF parsing error", err);
+                        uploadedFileExtractedText = "[Error reading PDF text]";
+                    }
                 };
-                reader.readAsDataURL(file);
+                reader.readAsArrayBuffer(file);
             } else if (file.name.endsWith('.docx')) {
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     mammoth.extractRawText({arrayBuffer: event.target.result})
                         .then(result => {
                             uploadedFileExtractedText = result.value;
-                            uploadedFileBase64 = null;
                         })
                         .catch(err => console.error("DOCX parsing error", err));
                 };
@@ -368,7 +380,6 @@
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     uploadedFileExtractedText = event.target.result;
-                    uploadedFileBase64 = null;
                 };
                 reader.readAsText(file);
             } else {
@@ -382,37 +393,31 @@
             fileNameDisplay.innerText = '';
             fileNameContainer.classList.add('hidden');
             dropzone.classList.remove('hidden');
-            uploadedFileBase64 = null;
-            uploadedFileMime = null;
             uploadedFileExtractedText = "";
         }
 
-        // --- GEMINI API INTEGRATION ---
-        const apiKey = ""; 
-        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
-
-        async function fetchGeminiWithRetry(partsArray, retries = 5) {
-            const delays = [1000, 2000, 4000, 8000, 16000];
-            
+        // --- FREE LIVE AI INTEGRATION (Pollinations.ai) ---
+        // This endpoint provides free, no-key access to generative AI and supports CORS for GitHub Pages.
+        async function fetchFreeAI(systemPrompt, userPrompt, retries = 3) {
+            const delays = [1000, 2000, 4000];
             for (let i = 0; i < retries; i++) {
                 try {
-                    const response = await fetch(modelUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                    const response = await fetch("https://text.pollinations.ai/", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            contents: [{ parts: partsArray }],
-                            systemInstruction: { 
-                                parts: [{ text: "You are the 'Boss System' AI in a wireframe-style educational simulator. Your goal is to simulate real-world chaos for students to teach adaptability and rapid problem-solving. Speak directly and professionally. Keep responses concise, impactful, and format with basic markdown for emphasis." }] 
-                            }
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userPrompt }
+                            ],
+                            jsonMode: false
                         })
                     });
 
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                    
-                    const data = await response.json();
-                    return data.candidates?.[0]?.content?.parts?.[0]?.text || "System Error. Data corrupted.";
+                    return await response.text();
                 } catch (error) {
-                    if (i === retries - 1) return `Simulation Error: Cannot connect to Boss System. Please check API environment. Details: ${error.message}`;
+                    if (i === retries - 1) return `Simulation Error: Cannot connect to Boss System proxy. Details: ${error.message}`;
                     await new Promise(resolve => setTimeout(resolve, delays[i]));
                 }
             }
@@ -422,7 +427,7 @@
 
         async function submitProject() {
             projectData = projectInput.value.trim();
-            if (!projectData && !uploadedFileExtractedText && !uploadedFileBase64) {
+            if (!projectData && !uploadedFileExtractedText) {
                 alert("Please outline your strategy or upload a document to proceed.");
                 return;
             }
@@ -443,34 +448,36 @@
             step2Loading.classList.remove('hidden');
             lucide.createIcons();
 
-            // Prompt Building
-            let promptText = `The student has submitted this project baseline:\n"${projectData}"\n`;
+            let combinedText = `Project Baseline: "${projectData}"\n`;
             if (uploadedFileExtractedText) {
-                promptText += `\nThey uploaded a document containing:\n"${uploadedFileExtractedText.substring(0, 15000)}"\n`;
-            }
-            promptText += `\nTask: Throw a massive, realistic "curveball" at them. A sudden constraint, a disaster, a changing client requirement, or a slashed budget. Make it unexpected but possible in the real world. Do not solve it for them. End by challenging them to adapt. Keep it under 4 sentences. Make it sound urgent.`;
-
-            let apiParts = [{ text: promptText }];
-            if (uploadedFileBase64 && uploadedFileMime === 'application/pdf') {
-                apiParts.push({ inlineData: { mimeType: uploadedFileMime, data: uploadedFileBase64 } });
+                combinedText += `Uploaded Document Content: "${uploadedFileExtractedText.substring(0, 8000)}"\n`;
             }
 
-            currentCurveball = await fetchGeminiWithRetry(apiParts);
-            
-            // Format markdown bolding for light theme
-            currentCurveball = currentCurveball.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 bg-yellow-100 px-1 rounded">$1</strong>');
-            
-            curveballDisplay.innerHTML = currentCurveball;
-            
-            // Show Content in Col 2
-            step2Loading.classList.add('hidden');
-            step2Content.classList.remove('hidden');
+            const systemPrompt = "You are the 'Boss System' AI in an educational simulator. Your goal is to simulate real-world chaos for students to teach adaptability. Speak directly and professionally. Keep it short and urgent. Format with basic markdown for emphasis. Never output images.";
+            const userPrompt = `${combinedText}\nTask: Throw a massive, realistic "curveball" at them based on their project description and/or document. A sudden constraint, a disaster, a changing client requirement, or a slashed budget. Make it unexpected but physically possible. Do not solve it for them. End by challenging them to adapt. Keep it under 4 sentences.`;
 
-            // Unlock Column 3
-            col3.classList.remove('opacity-60', 'pointer-events-none');
-            badge3.classList.replace('bg-gray-200', 'bg-gray-800');
-            badge3.classList.replace('text-gray-500', 'text-white');
-            title3.classList.replace('text-gray-400', 'text-gray-800');
+            try {
+                currentCurveball = await fetchFreeAI(systemPrompt, userPrompt);
+                
+                // Format markdown bolding for light theme
+                currentCurveball = currentCurveball.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 bg-yellow-100 px-1 rounded">$1</strong>');
+                
+                curveballDisplay.innerHTML = currentCurveball;
+                
+                // Show Content in Col 2
+                step2Loading.classList.add('hidden');
+                step2Content.classList.remove('hidden');
+
+                // Unlock Column 3
+                col3.classList.remove('opacity-60', 'pointer-events-none');
+                badge3.classList.replace('bg-gray-200', 'bg-gray-800');
+                badge3.classList.replace('text-gray-500', 'text-white');
+                title3.classList.replace('text-gray-400', 'text-gray-800');
+            } catch (e) {
+                console.error(e);
+                resetSimulation();
+                return;
+            }
             
             btn1.innerHTML = 'Deployed <i data-lucide="check" class="w-4 h-4"></i>';
             lucide.createIcons();
@@ -486,29 +493,35 @@
             btnSubmitAdaptation.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Processing...';
             btnSubmitAdaptation.disabled = true;
 
-            let contextText = `Project Baseline: "${projectData}"\n`;
-            if (uploadedFileExtractedText) contextText += `Document Content: "${uploadedFileExtractedText.substring(0, 5000)}"\n`;
-            
-            const promptText = `${contextText}\nCurveball Thrown: "${currentCurveball}"\nStudent's Adaptation: "${adaptationData}"\n\nTask: Evaluate the student's pivot as a tough but fair manager. \n1. Did they actually solve the problem logically?\n2. Assess their "Resilience" and "Adaptability". \n3. Give them constructive feedback on what works and what might fail.\nFormat with clear bullet points.`;
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) combinedText += `Document Content: "${uploadedFileExtractedText.substring(0, 5000)}"\n`;
 
-            let feedback = await fetchGeminiWithRetry([{ text: promptText }]);
-            
-            saveToHistory(projectData, currentCurveball, adaptationData, feedback);
+            const systemPrompt = "You are the 'Boss System' AI evaluating a student's pivot to a sudden disaster. Be a tough but fair manager. Keep it encouraging but realistic. Format with clear bullet points. Never output images.";
+            const userPrompt = `${combinedText}\nCurveball Thrown: "${currentCurveball}"\nStudent's Adaptation: "${adaptationData}"\n\nTask: Evaluate the student's pivot. \n1. Did they actually solve the problem logically?\n2. Assess their "Resilience" and "Adaptability". \n3. Give them constructive feedback on what works and what might fail.\nFormat with clear bullet points.`;
 
-            // Format markdown to HTML
-            feedback = feedback.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-bold">$1</strong>');
-            feedback = feedback.replace(/\*(.*?)\*/g, '<em class="font-semibold text-gray-700">$1</em>');
-            feedback = feedback.split('\n').map(line => {
-                if(line.startsWith('* ') || line.startsWith('- ')) return `<li class="ml-6 mt-2 list-disc">${line.substring(2)}</li>`;
-                if(line.trim() === '') return '<br/>';
-                return `<p>${line}</p>`;
-            }).join('');
+            try {
+                let feedback = await fetchFreeAI(systemPrompt, userPrompt);
+                
+                saveToHistory(projectData, currentCurveball, adaptationData, feedback);
 
-            feedbackDisplay.innerHTML = `<div class="bg-white border border-gray-300 p-5 rounded shadow-sm">${feedback}</div>`;
-            
-            btnSubmitAdaptation.innerHTML = 'Submitted <i data-lucide="check" class="w-5 h-5"></i>';
-            evaluationModal.classList.remove('hidden');
-            lucide.createIcons();
+                // Format markdown to HTML
+                feedback = feedback.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-bold">$1</strong>');
+                feedback = feedback.replace(/\*(.*?)\*/g, '<em class="font-semibold text-gray-700">$1</em>');
+                feedback = feedback.split('\n').map(line => {
+                    if(line.startsWith('* ') || line.startsWith('- ')) return `<li class="ml-6 mt-2 list-disc">${line.substring(2)}</li>`;
+                    if(line.trim() === '') return '<br/>';
+                    return `<p>${line}</p>`;
+                }).join('');
+
+                feedbackDisplay.innerHTML = `<div class="bg-white border border-gray-300 p-5 rounded shadow-sm">${feedback}</div>`;
+                
+                btnSubmitAdaptation.innerHTML = 'Submitted <i data-lucide="check" class="w-5 h-5"></i>';
+                evaluationModal.classList.remove('hidden');
+                lucide.createIcons();
+            } catch (e) {
+                btnSubmitAdaptation.innerHTML = 'Submit Revised Plan <i data-lucide="check-circle" class="w-4 h-4"></i>';
+                btnSubmitAdaptation.disabled = false;
+            }
         }
 
         // --- HINT TOOL LOGIC ---
@@ -516,19 +529,37 @@
             hintBtn.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>';
             hintBtn.disabled = true;
 
-            let contextText = `Project Baseline: "${projectData}"\n`;
-            const promptText = `${contextText}\nCurveball: "${currentCurveball}"\n\nTask: The student is stuck. Give them a brief 1-sentence strategic hint. Give a subtle nudge, not the exact answer.`;
-
-            try {
-                let hint = await fetchGeminiWithRetry([{ text: promptText }]);
-                hintDisplay.innerHTML = hint;
-                hintDisplay.classList.remove('hidden');
-            } catch (e) {
-                hintDisplay.innerHTML = "System busy. Hint unavailable.";
-                hintDisplay.classList.remove('hidden');
+            // Fix: Include file contents in the hint generation context
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) {
+                combinedText += `Document Content: "${uploadedFileExtractedText.substring(0, 3000)}"\n`;
             }
 
-            hintBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Hinted';
+            const systemPrompt = "You are a helpful mentor AI. You give brief 1-sentence strategic hints. Do NOT give the exact answer.";
+            const userPrompt = `${combinedText}\nCurveball Thrown: "${currentCurveball}"\n\nTask: The student is stuck. Give them a brief 1-sentence strategic hint to pivot.`;
+
+            try {
+                let hint = await fetchFreeAI(systemPrompt, userPrompt);
+                
+                // Fix: Catch string errors masquerading as successful API responses
+                if (hint.startsWith("Simulation Error:")) {
+                    throw new Error(hint);
+                }
+
+                // Safely render the text instead of dumping arbitrary HTML
+                hintDisplay.innerText = hint;
+                hintDisplay.classList.remove('hidden');
+                hintBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Hinted';
+            } catch (e) {
+                console.error("Hint Generation Failed:", e);
+                hintDisplay.innerText = "System busy. Hint unavailable right now. Please try again.";
+                hintDisplay.classList.remove('hidden');
+                
+                // Allow the user to try again
+                hintBtn.innerHTML = '<i data-lucide="lightbulb" class="w-3 h-3"></i> Try Hint Again';
+                hintBtn.disabled = false;
+            }
+
             lucide.createIcons();
         }
 
