@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curveball Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.4.21/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Custom wireframe styling */
+        .wireframe-box {
+            border: 2px solid #9ca3af;
+            background-color: #ffffff;
+        }
+        .wireframe-dashed {
+            border: 2px dashed #6b7280;
+            background-color: #e5e7eb;
+        }
+        .placeholder-img {
+            background-color: #d1d5db;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #6b7280;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.75rem;
+        }
+        
+        /* Light mode scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e5e7eb; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #9ca3af; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280; 
+        }
+
+        .fade-in {
+            animation: fadeIn 0.4s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex overflow-hidden selection:bg-gray-300 selection:text-black">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-64 wireframe-box border-t-0 border-l-0 border-b-0 hidden md:flex flex-col bg-white z-10 relative overflow-y-auto">
+        <div class="p-6 border-b-2 border-dashed border-gray-300 shrink-0">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full placeholder-img flex-shrink-0"><i data-lucide="zap" class="w-5 h-5"></i></div>
+                <h1 class="text-xl font-bold tracking-tight text-gray-700 leading-tight">Curveball<br>Simulator</h1>
+            </div>
+        </div>
+        
+        <nav class="flex-1 p-4 space-y-2">
+            <button onclick="resetSimulation()" class="w-full text-left px-4 py-3 bg-gray-200 rounded text-gray-800 font-bold border border-gray-400 flex items-center gap-2">
+                <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+            </button>
+            <button onclick="openHistory()" class="w-full text-left px-4 py-3 text-gray-600 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 transition-colors">
+                <i data-lucide="history" class="w-4 h-4"></i> Session History
+            </button>
+            <button id="btnAIBossFeed" onclick="openAIBossFeed()" class="w-full text-left px-4 py-3 text-gray-500 rounded font-semibold flex items-center gap-2 opacity-50 cursor-not-allowed transition-colors" disabled title="Deploys after first Twist">
+                <i data-lucide="message-square-warning" class="w-4 h-4"></i> AI Boss Feed
+            </button>
+            
+            <div class="pt-4 mt-2 border-t border-gray-200 space-y-2">
+                <a href="https://mafe504.github.io/Curveball/old.html" target="_blank" class="w-full text-left px-4 py-3 text-indigo-600 hover:bg-indigo-50 rounded font-semibold flex items-center gap-2 transition-colors">
+                    <i data-lucide="external-link" class="w-4 h-4"></i> Help (Old Version)
+                </a>
+                <button onclick="openDevMemo()" class="w-full text-left px-4 py-3 text-gray-600 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 transition-colors">
+                    <i data-lucide="file-code-2" class="w-4 h-4"></i> Developer Memo
+                </button>
+                <button onclick="openAbout()" class="w-full text-left px-4 py-3 text-gray-600 hover:bg-gray-100 rounded font-semibold flex items-center gap-2 transition-colors">
+                    <i data-lucide="info" class="w-4 h-4"></i> About
+                </button>
+            </div>
+        </nav>
+
+        <div class="p-4 border-t-2 border-dashed border-gray-300 shrink-0 relative group cursor-pointer hover:bg-gray-50 transition-colors" onclick="openProfileModal()">
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-gray-700">
+                <i data-lucide="edit-3" class="w-4 h-4"></i>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-full placeholder-img bg-gray-800 text-white border border-gray-600" id="sidebarAvatar">U</div>
+                <div>
+                    <div class="text-sm font-bold text-gray-800" id="sidebarName">Student Access</div>
+                    <div class="text-xs text-gray-500 font-medium" id="sidebarDetails">Profile not set</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 flex flex-col h-full overflow-y-auto bg-gray-50 relative">
+        
+        <!-- Header -->
+        <header class="px-8 py-6 border-b-2 border-dashed border-gray-300 bg-white flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Active Challenge: Simulation Run</h2>
+                <p class="text-sm text-gray-500 mt-1 font-semibold">Adaptability & Resilience Training</p>
+            </div>
+            <button onclick="openHistory()" class="px-5 py-2.5 wireframe-box bg-gray-100 hover:bg-gray-200 font-bold rounded shadow-sm text-sm flex items-center gap-2 transition-colors">
+                <i data-lucide="book-open" class="w-4 h-4"></i> View Past Logs
+            </button>
+        </header>
+
+        <!-- Project Flow Board -->
+        <div class="p-6 md:p-8 flex-1 flex flex-col min-h-0">
+            <div class="mb-6 shrink-0">
+                <h3 class="text-xl font-bold mb-1 text-gray-800">Simulation Progress</h3>
+                <p class="text-sm text-gray-500 font-medium">Work from left to right. Set up your project, face the AI Twist, and pivot your strategy.</p>
+            </div>
+
+            <!-- 3-Step Wireframe Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-[500px]">
+                
+                <!-- Step 1: Initial Setup -->
+                <div class="wireframe-box rounded-lg p-5 flex flex-col relative shadow-sm">
+                    <div class="absolute top-0 right-0 bg-gray-200 text-xs font-bold px-3 py-1 border-b-2 border-l-2 border-gray-400 rounded-bl-lg text-gray-700">Step 1</div>
+                    <h4 class="font-bold text-lg border-b-2 border-gray-300 pb-3 mb-4 text-gray-800">1. The Setup</h4>
+                    <p class="text-sm text-gray-600 mb-4 font-medium">Outline your original project idea and upload any related plans.</p>
+                    
+                    <textarea id="projectInput" class="w-full flex-1 wireframe-box bg-gray-50 p-3 text-sm resize-none mb-4 outline-none focus:border-gray-600 focus:bg-white transition-colors" placeholder="Type your project description here... e.g., 'I am designing a Mars Habitat using titanium panels...'"></textarea>
+                    
+                    <!-- File Dropzone -->
+                    <div id="dropzone" class="wireframe-dashed h-28 rounded flex flex-col items-center justify-center p-4 mb-4 relative cursor-pointer hover:border-gray-500 hover:bg-gray-200 transition-colors">
+                        <input type="file" id="fileUpload" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".pdf,.docx,.txt">
+                        <i data-lucide="file-up" class="w-6 h-6 text-gray-600 mb-1"></i>
+                        <span class="text-xs text-gray-600 font-bold">Drag & Drop Files Here</span>
+                        <span class="text-[10px] text-gray-500 mt-1">(PDF, DOCX, TXT)</span>
+                    </div>
+
+                    <!-- Selected File Display -->
+                    <div id="fileNameContainer" class="hidden border-2 border-gray-300 p-2 rounded text-sm text-gray-600 flex justify-between items-center bg-gray-100 mb-4 font-mono text-xs font-bold">
+                        <span id="fileNameDisplay" class="truncate w-[90%]"></span>
+                        <button onclick="clearFile()" class="text-gray-500 hover:text-red-600 ml-2"><i data-lucide="x-square" class="w-4 h-4"></i></button>
+                    </div>
+
+                    <button id="btnSubmitProject" onclick="submitProject()" class="w-full py-3 bg-gray-800 text-white font-bold rounded mt-auto hover:bg-gray-900 shadow-md transition-colors flex justify-center items-center gap-2">
+                        Deploy Setup <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Step 2: The Curveball (AI Twist) -->
+                <div id="col2" class="wireframe-dashed rounded-lg p-5 flex flex-col relative border-4 border-gray-300 opacity-60 pointer-events-none transition-all duration-500 bg-gray-100">
+                    <div id="badge2" class="absolute top-0 right-0 bg-gray-300 text-gray-600 text-xs font-bold px-3 py-1 border-b-2 border-l-2 border-gray-400 rounded-bl-lg transition-colors">Step 2</div>
+                    <h4 id="title2" class="font-bold text-lg border-b-2 border-gray-400 pb-3 mb-4 flex items-center text-gray-500 transition-colors">
+                        <span class="mr-2">⚡</span> 2. The AI Twist
+                    </h4>
+                    
+                    <!-- Empty State -->
+                    <div id="step2Empty" class="flex-1 flex flex-col items-center justify-center text-gray-400 space-y-3">
+                        <i data-lucide="lock" class="w-8 h-8"></i>
+                        <p class="text-sm font-semibold text-center px-4">Complete Step 1 to unlock the simulation.</p>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="step2Loading" class="hidden flex-1 flex flex-col items-center justify-center text-gray-600 space-y-3">
+                        <i data-lucide="loader-2" class="w-8 h-8 animate-spin text-gray-800"></i>
+                        <p class="text-sm font-bold" id="aiLoadingText">Boss System is analyzing your project architecture...</p>
+                    </div>
+
+                    <!-- Active Content (Wireframe chat bubble style) -->
+                    <div id="step2Content" class="hidden flex-1 bg-gray-100 border-2 border-gray-400 rounded shadow-sm flex flex-col overflow-hidden relative fade-in">
+                        <div class="flex items-center justify-between p-4 shrink-0 border-b border-gray-300 bg-white">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 placeholder-img rounded-full bg-gray-800 text-white">AI</div>
+                                <div>
+                                    <div class="font-bold text-sm text-gray-900">Boss System</div>
+                                    <div class="text-xs text-red-600 font-bold mt-0.5 uppercase tracking-wide">Active Crisis Feed</div>
+                                </div>
+                            </div>
+                            <button onclick="openAIBossFeed()" class="text-xs bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1.5 px-3 rounded flex items-center gap-1 transition-colors" title="Ask Boss System for details">
+                                <i data-lucide="message-circle" class="w-3 h-3"></i> Dig Deeper
+                            </button>
+                        </div>
+                        <div class="p-4 flex-1 overflow-y-auto space-y-4" id="curveballDisplay">
+                            <!-- Chat log injected here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Step 3: The Pivot (Goal) -->
+                <div id="col3" class="wireframe-box rounded-lg p-5 flex flex-col relative shadow-sm opacity-60 pointer-events-none transition-all duration-500">
+                    <div id="badge3" class="absolute top-0 right-0 bg-gray-200 text-gray-500 text-xs font-bold px-3 py-1 border-b-2 border-l-2 border-gray-400 rounded-bl-lg transition-colors">Step 3</div>
+                    <h4 id="title3" class="font-bold text-lg border-b-2 border-gray-300 pb-3 mb-4 text-gray-400 transition-colors">3. The Pivot</h4>
+                    <p class="text-sm text-gray-600 mb-4 font-medium shrink-0">Adapt your strategy based on the AI's feedback. You have 3 attempts to solve this.</p>
+                    
+                    <div class="flex-1 flex flex-col space-y-3 min-h-0">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between items-center">
+                            Your Strategy Response
+                            <button id="hintBtn" onclick="getHint()" class="text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors capitalize font-semibold bg-indigo-50 px-2 py-1 rounded border border-indigo-200">
+                                <i data-lucide="lightbulb" class="w-3 h-3"></i> Hint
+                            </button>
+                        </label>
+                        
+                        <!-- Hint Display -->
+                        <div id="hintDisplay" class="hidden p-3 border border-indigo-300 bg-indigo-50/80 rounded text-indigo-900 text-sm italic fade-in text-xs font-medium"></div>
+
+                        <textarea id="adaptationInput" class="w-full flex-1 wireframe-box bg-white p-3 text-sm resize-none outline-none focus:border-gray-600 transition-colors" placeholder="Type your explanation here... e.g., 'I will pivot the design by...'"></textarea>
+                        
+                        <button id="btnSubmitAdaptation" onclick="submitAdaptation()" class="w-full py-3 bg-gray-800 text-white font-bold rounded shrink-0 hover:bg-gray-900 shadow-md transition-colors mt-2 flex justify-center items-center gap-2 disabled:bg-gray-400">
+                            Submit Pivot (Attempt 1/3) <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- AI Boss Feed Modal (Deep Dive Chat) -->
+    <div id="aiBossFeedModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-end items-stretch p-0 sm:p-4 fade-in">
+        <div class="wireframe-box rounded-none sm:rounded-xl w-full max-w-lg p-0 relative shadow-2xl flex flex-col h-full bg-gray-50">
+            <div class="p-4 border-b-2 border-gray-300 bg-white sm:rounded-t-xl flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 placeholder-img rounded-full bg-red-100 text-red-700 border-2 border-red-300"><i data-lucide="message-square-warning" class="w-5 h-5"></i></div>
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900">Boss System Interrogation</h2>
+                        <p class="text-xs text-red-600 font-bold uppercase tracking-wider">Dig Deeper into the Crisis</p>
+                    </div>
+                </div>
+                <button onclick="closeAIBossFeed()" class="text-gray-400 hover:text-gray-800 bg-gray-100 border border-gray-300 rounded p-1.5 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="p-4 flex-1 overflow-y-auto space-y-4" id="aiBossFeedChatDisplay">
+                <!-- Interactive Deep Dive Chat injected here -->
+            </div>
+            
+            <div class="p-4 border-t-2 border-gray-300 bg-white sm:rounded-b-xl shrink-0 flex gap-2">
+                <input type="text" id="bossChatInput" class="flex-1 wireframe-box bg-gray-50 p-3 text-sm rounded outline-none focus:border-gray-600 focus:bg-white transition-colors" placeholder="Ask the Boss for more technical details..." onkeypress="if(event.key === 'Enter') sendBossMessage()">
+                <button onclick="sendBossMessage()" id="btnSendBossChat" class="px-5 py-3 bg-gray-800 text-white font-bold rounded hover:bg-gray-900 shadow transition-colors flex items-center justify-center">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Phase 4: Final Evaluation Modal -->
+    <div id="evaluationModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 sm:p-6 fade-in">
+        <div class="wireframe-box rounded-xl w-full max-w-3xl p-0 relative shadow-2xl flex flex-col max-h-[90vh]">
+            
+            <div class="p-6 border-b-2 border-dashed border-gray-300 bg-gray-50 rounded-t-xl flex justify-between items-center shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 placeholder-img rounded-full bg-emerald-100 text-emerald-700 border-2 border-emerald-300"><i data-lucide="clipboard-check" class="w-5 h-5"></i></div>
+                    <div>
+                        <h2 class="text-xl font-bold text-gray-900">Final Simulation Report</h2>
+                        <p class="text-xs text-emerald-600 font-bold uppercase tracking-wider" id="evalSubtext">Evaluation Complete</p>
+                    </div>
+                </div>
+                <button onclick="closeEvaluation()" class="text-gray-400 hover:text-gray-800 bg-white border border-gray-300 rounded p-1.5 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto text-gray-800 text-sm leading-relaxed font-medium space-y-4" id="feedbackDisplay">
+                <!-- Feedback injected here -->
+            </div>
+
+            <div class="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl flex justify-between shrink-0">
+                <div class="flex gap-2">
+                    <button onclick="printReport()" class="px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold rounded hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-2">
+                        <i data-lucide="printer" class="w-4 h-4"></i> Print
+                    </button>
+                    <button onclick="downloadPDF()" class="px-4 py-2.5 bg-white border border-gray-300 text-gray-700 font-bold rounded hover:bg-gray-100 shadow-sm transition-colors flex items-center gap-2">
+                        <i data-lucide="download" class="w-4 h-4"></i> PDF
+                    </button>
+                </div>
+                <button onclick="resetSimulation()" class="px-6 py-2.5 bg-gray-800 text-white font-bold rounded hover:bg-gray-900 shadow transition-colors flex items-center gap-2">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Run New
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-start pt-10 sm:pt-20 overflow-y-auto pb-20 fade-in">
+        <div class="wireframe-box rounded-xl w-full max-w-3xl p-6 sm:p-8 relative shadow-2xl">
+            <button onclick="closeHistory()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 border border-gray-300 rounded p-1">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h2 class="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3 border-b-2 border-gray-200 pb-4">
+                <i data-lucide="history" class="text-gray-500"></i> Session History
+            </h2>
+            <div id="historyList" class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                <!-- History items injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Developer Memo Modal -->
+    <div id="devMemoModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 fade-in">
+        <div class="wireframe-box rounded-xl w-full max-w-2xl p-6 relative shadow-2xl bg-white">
+            <button onclick="closeDevMemo()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 border border-gray-300 rounded p-1">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <h2 class="text-xl font-bold text-gray-900 mb-2 flex items-center gap-2 border-b-2 border-gray-200 pb-3">
+                <i data-lucide="file-code-2" class="text-indigo-600"></i> Developer Log: System Updates
+            </h2>
+            <div class="mt-4 text-sm text-gray-700 leading-relaxed space-y-3 font-medium">
+                <p>Welcome to the enhanced version of the Curveball Simulator. Here are the key systematic upgrades implemented during this update cycle:</p>
+                <ul class="list-disc ml-6 space-y-2">
+                    <li><strong>Dynamic Vulnerability Engine:</strong> Replaced generic "budget cut" scenarios with context-aware AI constraints targeting highly specific project materials and structural flaws.</li>
+                    <li><strong>Profile Calibration:</strong> Added user profile integration (Name, Age, Grade) to dynamically adjust AI difficulty, vocabulary, and crisis complexity based on the student's level.</li>
+                    <li><strong>3-Trial Pivot Loop:</strong> Replaced instant acceptance with a 3-turn iteration loop, requiring strategic growth and forcing users to address compounding complications.</li>
+                    <li><strong>Cryptic Hint System:</strong> Shifted from full-sentence hints to a 2-4 raw keyword system to encourage independent problem-solving.</li>
+                    <li><strong>Rigorous Constraints:</strong> Enforced a 15-word minimum constraint on student submissions to demand deeper analytical thinking and explanation.</li>
+                    <li><strong>Reporting Suite:</strong> Added comprehensive HTML to PDF download and Print functionalities for the final evaluation report.</li>
+                    <li><strong>AI Boss Interrogation:</strong> Unlocked the AI Boss Feed, allowing users to actively interrogate the system about technical crisis parameters in real-time.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div id="aboutModal" class="hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 fade-in">
+        <div class="wireframe-box rounded-xl w-full max-w-sm p-8 relative shadow-2xl bg-white text-center">
+            <button onclick="closeAbout()" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 bg-gray-100 border border-gray-300 rounded p-1">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <div class="w-16 h-16 mx-auto bg-gray-800 text-white rounded-full flex items-center justify-center mb-4 border-4 border-gray-200 shadow-sm">
+                <i data-lucide="code" class="w-8 h-8"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-1">Curveball Simulator</h2>
+            <p class="text-sm text-gray-500 font-bold mb-6">Educational Build v2.0</p>
+            <div class="bg-gray-50 border border-gray-200 p-4 rounded text-sm text-gray-700 font-medium">
+                <p class="mb-2">Proudly Designed and Developed by:</p>
+                <p class="font-bold text-lg text-indigo-700">Angelina & Musa</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Onboarding / Profile Modal -->
+    <div id="profileModal" class="hidden fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[100] flex justify-center items-center p-4 fade-in">
+        <div class="wireframe-box rounded-xl w-full max-w-md p-6 relative shadow-2xl bg-white">
+            <h2 class="text-2xl font-bold text-gray-900 mb-2" id="profileModalTitle">Welcome to Simulator</h2>
+            <p class="text-gray-600 mb-6 text-sm font-medium">Please enter your details to calibrate the AI difficulty and context.</p>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">First Name</label>
+                    <input type="text" id="profileName" class="w-full wireframe-box bg-gray-50 p-2.5 text-sm rounded outline-none focus:border-gray-600 focus:bg-white transition-colors" placeholder="e.g. Alex">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Age</label>
+                        <input type="number" id="profileAge" min="5" max="99" class="w-full wireframe-box bg-gray-50 p-2.5 text-sm rounded outline-none focus:border-gray-600 focus:bg-white transition-colors" placeholder="e.g. 14">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Grade</label>
+                        <select id="profileGrade" class="w-full wireframe-box bg-gray-50 p-2.5 text-sm rounded outline-none focus:border-gray-600 focus:bg-white transition-colors">
+                            <option value="" disabled selected>Select Grade</option>
+                            <option value="5">Grade 5</option>
+                            <option value="6">Grade 6</option>
+                            <option value="7">Grade 7</option>
+                            <option value="8">Grade 8</option>
+                            <option value="9">Grade 9</option>
+                            <option value="10">Grade 10</option>
+                            <option value="11">Grade 11</option>
+                            <option value="12">Grade 12</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="saveProfile()" class="w-full py-3 bg-gray-800 text-white font-bold rounded mt-6 hover:bg-gray-900 shadow-md transition-colors flex justify-center items-center gap-2">
+                    Calibrate System <i data-lucide="settings-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Icons
+        lucide.createIcons();
+
+        // Initialize PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+        // Application State
+        let projectData = "";
+        let currentCurveball = "";
+        let uploadedFileExtractedText = "";
+        let userProfile = { name: '', age: '', grade: '' };
+        
+        // Multi-turn State
+        let trialCount = 1;
+        let sessionConversation = []; // Holds main pivot attempts
+        let latestAICritique = ""; // Tracks the current active crisis
+        let bossFeedConversation = []; // Holds side Q&A chat
+
+        // UI Elements
+        const projectInput = document.getElementById('projectInput');
+        const adaptationInput = document.getElementById('adaptationInput');
+        const curveballDisplay = document.getElementById('curveballDisplay');
+        const aiBossFeedChatDisplay = document.getElementById('aiBossFeedChatDisplay');
+        const bossChatInput = document.getElementById('bossChatInput');
+        const btnSendBossChat = document.getElementById('btnSendBossChat');
+        
+        const feedbackDisplay = document.getElementById('feedbackDisplay');
+        const fileUpload = document.getElementById('fileUpload');
+        const fileNameContainer = document.getElementById('fileNameContainer');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const dropzone = document.getElementById('dropzone');
+        const hintDisplay = document.getElementById('hintDisplay');
+        const hintBtn = document.getElementById('hintBtn');
+        const evaluationModal = document.getElementById('evaluationModal');
+        const aiLoadingText = document.getElementById('aiLoadingText');
+        const evalSubtext = document.getElementById('evalSubtext');
+
+        // Column Logic Elements
+        const col2 = document.getElementById('col2');
+        const step2Empty = document.getElementById('step2Empty');
+        const step2Loading = document.getElementById('step2Loading');
+        const step2Content = document.getElementById('step2Content');
+        const badge2 = document.getElementById('badge2');
+        const title2 = document.getElementById('title2');
+
+        const col3 = document.getElementById('col3');
+        const badge3 = document.getElementById('badge3');
+        const title3 = document.getElementById('title3');
+        const btnSubmitAdaptation = document.getElementById('btnSubmitAdaptation');
+        const btnAIBossFeed = document.getElementById('btnAIBossFeed');
+
+        // --- PROFILE LOGIC ---
+        function initProfile() {
+            const saved = localStorage.getItem('curveballProfile');
+            if (saved) {
+                userProfile = JSON.parse(saved);
+                updateSidebarProfile();
+            } else {
+                openProfileModal();
+            }
+        }
+
+        function openProfileModal() {
+            document.getElementById('profileName').value = userProfile.name || '';
+            document.getElementById('profileAge').value = userProfile.age || '';
+            document.getElementById('profileGrade').value = userProfile.grade || '';
+            document.getElementById('profileModalTitle').innerText = userProfile.name ? 'Update Calibration' : 'Welcome to Simulator';
+            document.getElementById('profileModal').classList.remove('hidden');
+        }
+
+        function saveProfile() {
+            const name = document.getElementById('profileName').value.trim();
+            const age = document.getElementById('profileAge').value.trim();
+            const grade = document.getElementById('profileGrade').value;
+
+            if (!name || !age || !grade) {
+                alert("Please fill in all fields so the AI can calibrate to your level.");
+                return;
+            }
+
+            userProfile = { name, age, grade };
+            localStorage.setItem('curveballProfile', JSON.stringify(userProfile));
+            updateSidebarProfile();
+            document.getElementById('profileModal').classList.add('hidden');
+        }
+
+        function updateSidebarProfile() {
+            document.getElementById('sidebarName').innerText = userProfile.name;
+            document.getElementById('sidebarDetails').innerText = `Grade ${userProfile.grade} // Age ${userProfile.age}`;
+            document.getElementById('sidebarAvatar').innerText = userProfile.name.charAt(0).toUpperCase();
+        }
+
+        // --- MODAL TOGGLES ---
+        function openDevMemo() { document.getElementById('devMemoModal').classList.remove('hidden'); }
+        function closeDevMemo() { document.getElementById('devMemoModal').classList.add('hidden'); }
+        
+        function openAbout() { document.getElementById('aboutModal').classList.remove('hidden'); }
+        function closeAbout() { document.getElementById('aboutModal').classList.add('hidden'); }
+
+        // --- AI BOSS FEED (DEEP DIVE CHAT) LOGIC ---
+        function openAIBossFeed() {
+            if(btnAIBossFeed.disabled) return;
+            document.getElementById('aiBossFeedModal').classList.remove('hidden');
+            // If empty, add initial context message
+            if(bossFeedConversation.length === 0 && latestAICritique !== "") {
+                const initMsg = `*ACTIVE CRISIS INJECTED:*\n\n${latestAICritique}\n\n*How can I clarify the technical parameters of this failure for you?*`;
+                bossFeedConversation.push({ role: 'ai', content: initMsg });
+                renderBossChatBubble('ai', initMsg);
+            }
+        }
+        function closeAIBossFeed() {
+            document.getElementById('aiBossFeedModal').classList.add('hidden');
+        }
+
+        function renderBossChatBubble(role, text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex w-full fade-in ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `p-3 rounded-lg max-w-[85%] text-sm font-medium leading-relaxed shadow-sm ${
+                role === 'user' 
+                ? 'bg-indigo-700 text-white rounded-br-none' 
+                : 'bg-white border border-gray-300 text-gray-800 rounded-bl-none'
+            }`;
+            
+            let formattedText = text;
+            if (role === 'ai') {
+                formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 bg-yellow-100 px-1 rounded">$1</strong>');
+                formattedText = formattedText.replace(/\*(.*?)\*/g, '<em class="text-gray-700">$1</em>');
+            }
+            
+            bubble.innerHTML = formattedText;
+            wrapper.appendChild(bubble);
+            aiBossFeedChatDisplay.appendChild(wrapper);
+            
+            setTimeout(() => {
+                aiBossFeedChatDisplay.scrollTop = aiBossFeedChatDisplay.scrollHeight;
+            }, 50);
+        }
+
+        async function sendBossMessage() {
+            const msg = bossChatInput.value.trim();
+            if (!msg) return;
+
+            // Render User
+            renderBossChatBubble('user', msg);
+            bossFeedConversation.push({ role: 'user', content: msg });
+            bossChatInput.value = '';
+
+            // UI State
+            bossChatInput.disabled = true;
+            btnSendBossChat.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            lucide.createIcons();
+
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) combinedText += `Document Content: "${uploadedFileExtractedText.substring(0, 3000)}"\n`;
+            const studentContext = `Student Profile: ${userProfile.name}, Age ${userProfile.age}, Grade ${userProfile.grade}.`;
+            const convoContext = bossFeedConversation.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n\n');
+
+            const systemPrompt = `You are the 'Boss System' AI. ${studentContext} The student is asking clarifying questions about the current active twist/crisis. Give them technical details, logistical context, or explain HOW the failure happened. DO NOT SOLVE THE PROBLEM FOR THEM. Answer their questions directly but keep the challenge intact. Keep responses to 2-3 short sentences.`;
+            
+            const userPrompt = `${combinedText}\nActive Crisis: "${latestAICritique}"\n\nQ&A History:\n${convoContext}\n\nTask: Answer the student's latest question.`;
+
+            try {
+                let aiResponse = await fetchFreeAI(systemPrompt, userPrompt);
+                bossFeedConversation.push({ role: 'ai', content: aiResponse });
+                renderBossChatBubble('ai', aiResponse);
+            } catch (e) {
+                renderBossChatBubble('ai', "System Error: Cannot connect to crisis database. Try again.");
+            }
+
+            bossChatInput.disabled = false;
+            btnSendBossChat.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>';
+            lucide.createIcons();
+            bossChatInput.focus();
+        }
+
+        // --- MAIN UI CHAT HELPER ---
+        function renderChatBubble(role, text) {
+            const wrapper = document.createElement('div');
+            wrapper.className = `flex w-full fade-in ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `p-3 rounded-lg max-w-[85%] text-sm font-medium leading-relaxed shadow-sm ${
+                role === 'user' 
+                ? 'bg-gray-800 text-white rounded-br-none' 
+                : 'bg-white border border-gray-300 text-gray-800 rounded-bl-none'
+            }`;
+            
+            let formattedText = text;
+            if (role === 'ai') {
+                formattedText = text.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 bg-yellow-100 px-1 rounded">$1</strong>');
+            }
+            
+            bubble.innerHTML = formattedText;
+            wrapper.appendChild(bubble);
+            curveballDisplay.appendChild(wrapper);
+            
+            setTimeout(() => {
+                curveballDisplay.scrollTop = curveballDisplay.scrollHeight;
+            }, 50);
+        }
+
+        // --- HISTORY LOGIC ---
+        function saveToHistory(projText, conversationOrCurveball, evaluationOrAdaptation) {
+            try {
+                let history = JSON.parse(localStorage.getItem('curveballHistory') || '[]');
+                const displayProject = projText || (fileNameDisplay.innerText ? `[Document Attached] ${fileNameDisplay.innerText}` : "No initial text provided.");
+                
+                let newRecord;
+                if (Array.isArray(conversationOrCurveball)) {
+                     // New format: Save full conversation array and final evaluation HTML
+                     newRecord = {
+                        date: new Date().toLocaleString(),
+                        project: displayProject.substring(0, 200),
+                        conversation: conversationOrCurveball,
+                        evaluation: evaluationOrAdaptation
+                    };
+                } else {
+                     // Fallback for older saved history items
+                     newRecord = {
+                        date: new Date().toLocaleString(),
+                        project: displayProject.substring(0, 200),
+                        curveball: conversationOrCurveball,
+                        adaptation: evaluationOrAdaptation,
+                        feedback: "Completed 3-trial pivot. Big picture evaluation saved."
+                     };
+                }
+
+                history.unshift(newRecord);
+                
+                if (history.length > 10) history.pop();
+                localStorage.setItem('curveballHistory', JSON.stringify(history));
+            } catch (e) {
+                console.error("Failed to save history to local storage", e);
+            }
+        }
+
+        function openHistory() {
+            const historyList = document.getElementById('historyList');
+            let history = [];
+            try {
+                history = JSON.parse(localStorage.getItem('curveballHistory') || '[]');
+            } catch (e) {}
+
+            if (history.length === 0) {
+                historyList.innerHTML = '<div class="text-gray-500 font-medium p-8 text-center bg-gray-50 border border-gray-200 rounded border-dashed">No past simulations found in cache.</div>';
+            } else {
+                historyList.innerHTML = history.map((item, index) => {
+                    let convoHtml = '';
+                    if (item.conversation && Array.isArray(item.conversation)) {
+                        convoHtml = item.conversation.map(msg => {
+                            let formattedContent = msg.content.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900">$1</strong>').replace(/\*(.*?)\*/g, '<em class="text-gray-700">$1</em>');
+                            return `
+                            <div class="mb-3 p-3 rounded-lg text-sm ${msg.role === 'ai' ? 'bg-gray-100 text-gray-800 border border-gray-300' : 'bg-gray-800 text-white'}">
+                                <strong class="text-[10px] uppercase tracking-wider block mb-1 opacity-80">${msg.role === 'ai' ? 'Boss System' : 'Student'}</strong>
+                                <div class="leading-relaxed">${formattedContent}</div>
+                            </div>
+                        `}).join('');
+                    } else {
+                        convoHtml = `
+                            <div class="bg-red-50 p-3 rounded border border-red-100 mb-2"><strong class="text-red-800 uppercase text-[10px] tracking-wider block mb-1">Curveball:</strong> <span class="text-gray-800 text-sm font-medium">${item.curveball || 'N/A'}</span></div>
+                            <div class="bg-blue-50 p-3 rounded border border-blue-100"><strong class="text-blue-800 uppercase text-[10px] tracking-wider block mb-1">Pivot:</strong> <span class="text-gray-800 text-sm font-medium">${item.adaptation || 'N/A'}</span></div>
+                        `;
+                    }
+
+                    return `
+                    <div class="wireframe-box rounded-lg p-5 bg-white space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <div class="text-xs text-gray-500 font-mono font-bold bg-gray-100 inline-block px-2 py-1 rounded border border-gray-200">${item.date}</div>
+                            <button onclick="document.getElementById('hist-details-${index}').classList.toggle('hidden')" class="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 transition-colors bg-indigo-50 px-2 py-1 rounded">
+                                View Full Review <i data-lucide="chevron-down" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                        <div><strong class="text-gray-700 uppercase text-[10px] tracking-wider block mb-1">1. Baseline:</strong> <span class="text-gray-600 text-sm font-medium">${item.project}...</span></div>
+                        
+                        <div id="hist-details-${index}" class="hidden mt-4 pt-4 border-t-2 border-dashed border-gray-200 fade-in space-y-4">
+                            <div>
+                                <strong class="text-gray-700 uppercase text-[10px] tracking-wider block mb-2">2. Crisis Timeline:</strong>
+                                <div class="space-y-2">
+                                    ${convoHtml}
+                                </div>
+                            </div>
+                            <div>
+                                <strong class="text-gray-700 uppercase text-[10px] tracking-wider block mb-2">3. Final Evaluation:</strong>
+                                <div class="bg-emerald-50 p-4 rounded border border-emerald-200 text-sm text-gray-800">${item.evaluation || item.feedback || 'Evaluation not found.'}</div>
+                            </div>
+                        </div>
+                    </div>
+                `}).join('');
+                
+                // Re-initialize icons for the newly injected HTML
+                setTimeout(() => lucide.createIcons(), 50);
+            }
+            document.getElementById('historyModal').classList.remove('hidden');
+        }
+
+        function closeHistory() {
+            document.getElementById('historyModal').classList.add('hidden');
+        }
+
+        // --- FILE UPLOAD LOGIC ---
+        fileUpload.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            fileNameDisplay.innerText = file.name;
+            fileNameContainer.classList.remove('hidden');
+            dropzone.classList.add('hidden');
+
+            if (file.type === 'application/pdf') {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const typedarray = new Uint8Array(event.target.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        let text = "";
+                        for (let i = 1; i <= pdf.numPages && i <= 8; i++) { 
+                            const page = await pdf.getPage(i);
+                            const content = await page.getTextContent();
+                            text += content.items.map(item => item.str).join(' ') + "\n";
+                        }
+                        uploadedFileExtractedText = text;
+                    } catch (err) {
+                        console.error("PDF parsing error", err);
+                        uploadedFileExtractedText = "[Error reading PDF text]";
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.name.endsWith('.docx')) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    mammoth.extractRawText({arrayBuffer: event.target.result})
+                        .then(result => {
+                            uploadedFileExtractedText = result.value;
+                        })
+                        .catch(err => console.error("DOCX parsing error", err));
+                };
+                reader.readAsArrayBuffer(file);
+            } else if (file.type === 'text/plain') {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    uploadedFileExtractedText = event.target.result;
+                };
+                reader.readAsText(file);
+            } else {
+                alert("Unsupported file format. Please use PDF, DOCX, or TXT.");
+                clearFile();
+            }
+        });
+
+        function clearFile() {
+            fileUpload.value = "";
+            fileNameDisplay.innerText = '';
+            fileNameContainer.classList.add('hidden');
+            dropzone.classList.remove('hidden');
+            uploadedFileExtractedText = "";
+        }
+
+        // --- FREE LIVE AI INTEGRATION (Pollinations.ai) ---
+        async function fetchFreeAI(systemPrompt, userPrompt, retries = 3) {
+            const delays = [1000, 2000, 4000];
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch("https://text.pollinations.ai/", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            messages: [
+                                { role: "system", content: systemPrompt },
+                                { role: "user", content: userPrompt }
+                            ],
+                            jsonMode: false,
+                            model: 'openai'
+                        })
+                    });
+
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return await response.text();
+                } catch (error) {
+                    if (i === retries - 1) return `Simulation Error: Cannot connect to Boss System proxy. Details: ${error.message}`;
+                    await new Promise(resolve => setTimeout(resolve, delays[i]));
+                }
+            }
+        }
+
+        // --- SIMULATION FLOW LOGIC ---
+
+        async function submitProject() {
+            projectData = projectInput.value.trim();
+            if (!projectData && !uploadedFileExtractedText) {
+                alert("Please outline your strategy or upload a document to proceed.");
+                return;
+            }
+
+            const btn1 = document.getElementById('btnSubmitProject');
+            btn1.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Deploying...';
+            btn1.disabled = true;
+
+            col2.classList.remove('opacity-60', 'pointer-events-none', 'border-gray-300', 'bg-gray-100');
+            col2.classList.add('border-gray-800', 'bg-white');
+            badge2.classList.replace('bg-gray-300', 'bg-gray-800');
+            badge2.classList.replace('text-gray-600', 'text-white');
+            title2.classList.replace('text-gray-500', 'text-gray-800');
+            
+            step2Empty.classList.add('hidden');
+            step2Loading.classList.remove('hidden');
+            aiLoadingText.innerText = "Boss System is analyzing your project architecture...";
+            lucide.createIcons();
+
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) {
+                combinedText += `Uploaded Document Content: "${uploadedFileExtractedText.substring(0, 8000)}"\n`;
+            }
+
+            const studentContext = `Student Profile: ${userProfile.name}, Age ${userProfile.age}, Grade ${userProfile.grade}.`;
+
+            const systemPrompt = `You are the 'Boss System' AI in an educational simulator. Your goal is to simulate real-world chaos for students to teach adaptability. You analyze the EXACT text provided and find critical structural, technical, or ethical vulnerabilities specific to their project. Speak directly and professionally. Keep it short and urgent. Format with basic markdown for emphasis. Never output images. ${studentContext} Calibrate your vocabulary, tone, and the complexity of the scenario specifically for a Grade ${userProfile.grade} student.`;
+            
+            const userPrompt = `${combinedText}\n\nTask: Analyze the specific details of their project above and throw a massive, realistic "curveball" at them. \n\nCRITICAL INSTRUCTIONS:\n1. MANDATORY: You MUST address the student by their name: "${userProfile.name}" right at the beginning.\n2. MANDATORY: You MUST directly target a specific material, technology, strategy, or goal mentioned in their text.\n3. DO NOT use generic disasters (like solar flares, asteroids, or earthquakes) unless their project is explicitly about space or geology.\n4. DO NOT use budget cuts.\n5. Scale difficulty for Grade ${userProfile.grade}.\n\nMake the twist a catastrophic failure of their specific design or a sudden shortage of their exact materials. Make it unexpected but physically possible. End by demanding them to fix it. Keep it under 4 sentences.`;
+
+            try {
+                currentCurveball = await fetchFreeAI(systemPrompt, userPrompt);
+                
+                // Track state
+                latestAICritique = currentCurveball;
+                sessionConversation.push({ role: 'ai', content: currentCurveball });
+                bossFeedConversation = []; // Reset deep dive chat
+                
+                // Render UI
+                curveballDisplay.innerHTML = '';
+                renderChatBubble('ai', currentCurveball);
+                
+                step2Loading.classList.add('hidden');
+                step2Content.classList.remove('hidden');
+
+                // Unlock Column 3
+                col3.classList.remove('opacity-60', 'pointer-events-none');
+                badge3.classList.replace('bg-gray-200', 'bg-gray-800');
+                badge3.classList.replace('text-gray-500', 'text-white');
+                title3.classList.replace('text-gray-400', 'text-gray-800');
+                
+                btnSubmitAdaptation.innerHTML = `Submit Pivot (Attempt ${trialCount}/3) <i data-lucide="check-circle" class="w-4 h-4"></i>`;
+                
+                // Enable Deep Dive Boss Feed
+                btnAIBossFeed.disabled = false;
+                btnAIBossFeed.classList.remove('opacity-50', 'cursor-not-allowed', 'text-gray-500');
+                btnAIBossFeed.classList.add('text-indigo-700', 'bg-indigo-50', 'hover:bg-indigo-100');
+                
+            } catch (e) {
+                console.error(e);
+                resetSimulation();
+                return;
+            }
+            
+            btn1.innerHTML = 'Deployed <i data-lucide="check" class="w-4 h-4"></i>';
+            lucide.createIcons();
+        }
+
+        async function submitAdaptation() {
+            const adaptationData = adaptationInput.value.trim();
+            if (!adaptationData) {
+                alert("Please explain how you will adapt to the curveball.");
+                return;
+            }
+
+            // Enforce detailed answers to make the user think deeper
+            const wordCount = adaptationData.split(/\s+/).filter(word => word.length > 0).length;
+            if (wordCount < 15) {
+                alert("Your strategy is too brief. Please provide a more detailed pivot (at least 15 words) explaining the 'how' and 'why' of your solution to demonstrate deeper thinking.");
+                return;
+            }
+
+            // Immediately render user's message in the chat
+            renderChatBubble('user', adaptationData);
+            sessionConversation.push({ role: 'user', content: adaptationData });
+            adaptationInput.value = ''; // clear input for next time
+
+            btnSubmitAdaptation.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Processing...';
+            btnSubmitAdaptation.disabled = true;
+
+            // Show loading UI in the chat column temporarily
+            const loadingBubbleId = `loading-${Date.now()}`;
+            const loadingHtml = `<div id="${loadingBubbleId}" class="flex w-full justify-start fade-in mb-4"><div class="p-3 rounded-lg bg-white border border-gray-300 text-gray-500 rounded-bl-none shadow-sm flex items-center gap-2"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Boss is reviewing...</div></div>`;
+            curveballDisplay.insertAdjacentHTML('beforeend', loadingHtml);
+            curveballDisplay.scrollTop = curveballDisplay.scrollHeight;
+            lucide.createIcons();
+
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) combinedText += `Document Content: "${uploadedFileExtractedText.substring(0, 5000)}"\n`;
+            const studentContext = `Student Profile: ${userProfile.name}, Age ${userProfile.age}, Grade ${userProfile.grade}.`;
+            
+            // Format previous conversation for the AI to understand context
+            const convoContext = sessionConversation.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+
+            if (trialCount < 3) {
+                // --- TRIAL 1 & 2: Push back and critique ---
+                const systemPrompt = `You are the 'Boss System' AI in a dynamic educational simulator. Speak directly and professionally. ${studentContext} Calibrate your tone and complexity for Grade ${userProfile.grade}. Keep responses to 3-4 sentences maximum.`;
+                
+                const userPrompt = `${combinedText}\n\nConversation History:\n${convoContext}\n\nTask: The student (${userProfile.name}) just provided the above pivot (the last USER message). Evaluate it. \n1. Acknowledge their idea, addressing them by name.\n2. CRITIQUE IT. Find a severe flaw, a side effect of their pivot, or introduce a compounding complication.\n3. Demand they THINK DEEPER. Challenge them to provide a much more detailed, step-by-step structural or logistical solution in their next attempt. Do not accept shallow fixes.`;
+
+                try {
+                    let aiResponse = await fetchFreeAI(systemPrompt, userPrompt);
+                    
+                    // Remove loading bubble
+                    document.getElementById(loadingBubbleId).remove();
+                    
+                    latestAICritique = aiResponse;
+                    sessionConversation.push({ role: 'ai', content: aiResponse });
+                    renderChatBubble('ai', aiResponse);
+                    
+                    // Inject update to Boss Feed
+                    bossFeedConversation.push({ role: 'ai', content: `*CRISIS UPDATED:*\n${aiResponse}`});
+                    if(!document.getElementById('aiBossFeedModal').classList.contains('hidden')) {
+                         renderBossChatBubble('ai', `*CRISIS UPDATED:*\n${aiResponse}`);
+                    }
+                    
+                    trialCount++;
+                    btnSubmitAdaptation.innerHTML = `Submit Pivot (Attempt ${trialCount}/3) <i data-lucide="check-circle" class="w-4 h-4"></i>`;
+                    btnSubmitAdaptation.disabled = false;
+                    
+                    // Clear hints
+                    hintDisplay.classList.add('hidden');
+                    hintDisplay.innerHTML = '';
+                    hintBtn.innerHTML = '<i data-lucide="lightbulb" class="w-3 h-3"></i> Hint';
+                    hintBtn.disabled = false;
+
+                } catch (e) {
+                    document.getElementById(loadingBubbleId).remove();
+                    btnSubmitAdaptation.innerHTML = `Submit Pivot (Attempt ${trialCount}/3) <i data-lucide="check-circle" class="w-4 h-4"></i>`;
+                    btnSubmitAdaptation.disabled = false;
+                }
+            } 
+            else {
+                // --- TRIAL 3: Final Acceptance and Big Picture ---
+                document.getElementById(loadingBubbleId).remove();
+                btnSubmitAdaptation.innerHTML = '<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i> Finalizing Report...';
+                
+                const systemPrompt = `You are the 'Boss System' AI finalizing the simulation for ${userProfile.name}. Be an encouraging but realistic mentor. ${studentContext} Ensure language matches Grade ${userProfile.grade}.`;
+                
+                const userPrompt = `${combinedText}\n\nFull Crisis Conversation History:\n${convoContext}\n\nTask: This is their 3rd and final attempt. \n1. ACCEPT their final solution and address them by name.\n2. BUILD THE BIG PICTURE: Summarize how their strategy evolved across all 3 trials.\n3. Discuss what they learned about resilience and adaptability in this specific context.\n4. Give them constructive feedback on what worked best.\nFormat with clear, encouraging bullet points. Never output images.`;
+
+                try {
+                    let feedback = await fetchFreeAI(systemPrompt, userPrompt);
+                    
+                    // Format markdown to HTML first so we can save the rendered version to history
+                    let formattedFeedback = feedback.replace(/\*\*(.*?)\*\*/g, '<strong class="text-gray-900 font-bold">$1</strong>');
+                    formattedFeedback = formattedFeedback.replace(/\*(.*?)\*/g, '<em class="font-semibold text-gray-700">$1</em>');
+                    formattedFeedback = formattedFeedback.split('\n').map(line => {
+                        if(line.startsWith('* ') || line.startsWith('- ')) return `<li class="ml-6 mt-2 list-disc">${line.substring(2)}</li>`;
+                        if(line.trim() === '') return '<br/>';
+                        return `<p>${line}</p>`;
+                    }).join('');
+
+                    // Save the full conversation state and the fully formatted evaluation to history
+                    saveToHistory(projectData, sessionConversation, formattedFeedback);
+
+                    evalSubtext.innerText = `Growth Journey Completed - ${userProfile.name}`;
+                    feedbackDisplay.innerHTML = `<div class="bg-white border border-gray-300 p-5 rounded shadow-sm">${formattedFeedback}</div>`;
+                    
+                    btnSubmitAdaptation.innerHTML = 'Simulation Complete <i data-lucide="flag" class="w-4 h-4"></i>';
+                    evaluationModal.classList.remove('hidden');
+                    lucide.createIcons();
+                } catch (e) {
+                    btnSubmitAdaptation.innerHTML = `Submit Pivot (Attempt 3/3) <i data-lucide="check-circle" class="w-4 h-4"></i>`;
+                    btnSubmitAdaptation.disabled = false;
+                }
+            }
+        }
+
+        // --- HINT TOOL LOGIC ---
+        async function getHint() {
+            hintBtn.innerHTML = '<i data-lucide="loader-2" class="w-3 h-3 animate-spin"></i>';
+            hintBtn.disabled = true;
+
+            let combinedText = `Project Baseline: "${projectData}"\n`;
+            if (uploadedFileExtractedText) {
+                combinedText += `Document Content: "${uploadedFileExtractedText.substring(0, 3000)}"\n`;
+            }
+            
+            const convoContext = sessionConversation.map(msg => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n');
+
+            const systemPrompt = `You are a cryptic mentor AI. You provide ONLY 2-4 raw keywords as a hint. NO sentences, NO instructions, NO grammar. Just thought-provoking keywords separated by commas. Tailor the conceptual difficulty for a Grade ${userProfile.grade} student.`;
+            const userPrompt = `${combinedText}\nRecent Conversation:\n${convoContext}\n\nTask: The student (${userProfile.name}) is stuck on attempt ${trialCount}. Give them 2-4 cryptic keywords to spark a deeper pivot idea. DO NOT write a full sentence.`;
+
+            try {
+                let hint = await fetchFreeAI(systemPrompt, userPrompt);
+                
+                if (hint.startsWith("Simulation Error:")) throw new Error(hint);
+
+                hintDisplay.innerText = hint;
+                hintDisplay.classList.remove('hidden');
+                hintBtn.innerHTML = '<i data-lucide="check" class="w-3 h-3"></i> Hinted';
+            } catch (e) {
+                console.error("Hint Generation Failed:", e);
+                hintDisplay.innerText = "System busy. Hint unavailable right now. Please try again.";
+                hintDisplay.classList.remove('hidden');
+                
+                hintBtn.innerHTML = '<i data-lucide="lightbulb" class="w-3 h-3"></i> Try Hint Again';
+                hintBtn.disabled = false;
+            }
+
+            lucide.createIcons();
+        }
+
+        function closeEvaluation() {
+            evaluationModal.classList.add('hidden');
+        }
+
+        // --- EXPORT LOGIC (PRINT / PDF) ---
+        function generateReportHTML() {
+            // Format the conversation log
+            let convoHtml = sessionConversation.map(msg => `
+                <div style="margin-bottom: 12px; padding: 12px; border-radius: 6px; background-color: ${msg.role === 'ai' ? '#f3f4f6' : '#e5e7eb'};">
+                    <strong style="color: ${msg.role === 'ai' ? '#1f2937' : '#374151'};">${msg.role === 'ai' ? 'Boss System' : userProfile.name}:</strong><br>
+                    <div style="margin-top: 4px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                        ${msg.content.replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div id="report-content" style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #1f2937; line-height: 1.5;">
+                    <h1 style="border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 20px;">Final Simulation Report</h1>
+                    <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 6px; margin-bottom: 30px;">
+                        <p style="margin: 0 0 5px 0;"><strong>Student:</strong> ${userProfile.name} | <strong>Grade:</strong> ${userProfile.grade} | <strong>Age:</strong> ${userProfile.age}</p>
+                        <p style="margin: 0;"><strong>Date:</strong> ${new Date().toLocaleString()}</p>
+                    </div>
+                    
+                    <h2 style="margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; color: #374151;">1. Project Baseline</h2>
+                    <p style="white-space: pre-wrap; background-color: #f9fafb; padding: 15px; border-left: 4px solid #9ca3af;">${projectData || (fileNameDisplay.innerText ? '[Attached Document: ' + fileNameDisplay.innerText + ']' : 'No text provided.')}</p>
+                    
+                    <h2 style="margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; color: #374151;">2. Crisis Timeline (Pivots)</h2>
+                    ${convoHtml}
+                    
+                    <h2 style="margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; color: #374151;">3. Final Evaluation</h2>
+                    <div style="background-color: #f9fafb; padding: 15px; border: 1px solid #e5e7eb; border-radius: 6px;">
+                        ${feedbackDisplay.innerHTML}
+                    </div>
+                </div>
+            `;
+        }
+
+        function printReport() {
+            const printWindow = window.open('', '_blank', 'width=800,height=800');
+            printWindow.document.write('<html><head><title>Simulation Report - ' + userProfile.name + '</title></head><body style="margin:0;">');
+            printWindow.document.write(generateReportHTML());
+            printWindow.document.write('</body></html>');
+            printWindow.document.close();
+            printWindow.focus();
+            
+            // Allow time for rendering before calling print
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 250);
+        }
+
+        function downloadPDF() {
+            // Provide UI feedback
+            const btn = event.currentTarget;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> Generating...';
+            btn.disabled = true;
+            lucide.createIcons();
+
+            const element = document.createElement('div');
+            element.innerHTML = generateReportHTML();
+            
+            const opt = {
+                margin:       0.5,
+                filename:     `Simulation_Report_${userProfile.name.replace(/\s+/g, '_')}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                // Restore button
+                btn.innerHTML = originalHtml;
+                btn.disabled = false;
+                lucide.createIcons();
+            });
+        }
+
+        function resetSimulation() {
+            closeEvaluation();
+            closeHistory();
+            closeAIBossFeed();
+            
+            // Reset Multi-turn State
+            trialCount = 1;
+            sessionConversation = [];
+            bossFeedConversation = [];
+            latestAICritique = "";
+            curveballDisplay.innerHTML = '';
+            aiBossFeedChatDisplay.innerHTML = '';
+            
+            // Reset Inputs
+            projectInput.value = '';
+            adaptationInput.value = '';
+            clearFile();
+            
+            // Reset Buttons & Hints
+            const btn1 = document.getElementById('btnSubmitProject');
+            btn1.innerHTML = 'Deploy Setup <i data-lucide="arrow-right" class="w-4 h-4"></i>';
+            btn1.disabled = false;
+            
+            btnSubmitAdaptation.innerHTML = 'Submit Pivot (Attempt 1/3) <i data-lucide="check-circle" class="w-4 h-4"></i>';
+            btnSubmitAdaptation.disabled = false;
+
+            hintDisplay.classList.add('hidden');
+            hintDisplay.innerHTML = '';
+            hintBtn.innerHTML = '<i data-lucide="lightbulb" class="w-3 h-3"></i> Hint';
+            hintBtn.disabled = false;
+
+            // Reset Columns UI & Boss Feed Button
+            btnAIBossFeed.disabled = true;
+            btnAIBossFeed.className = 'w-full text-left px-4 py-3 text-gray-500 rounded font-semibold flex items-center gap-2 opacity-50 cursor-not-allowed transition-colors';
+
+            col2.className = 'wireframe-dashed rounded-lg p-5 flex flex-col relative border-4 border-gray-300 opacity-60 pointer-events-none transition-all duration-500 bg-gray-100';
+            badge2.className = 'absolute top-0 right-0 bg-gray-300 text-gray-600 text-xs font-bold px-3 py-1 border-b-2 border-l-2 border-gray-400 rounded-bl-lg transition-colors';
+            title2.className = 'font-bold text-lg border-b-2 border-gray-400 pb-3 mb-4 flex items-center text-gray-500 transition-colors';
+            step2Empty.classList.remove('hidden');
+            step2Loading.classList.add('hidden');
+            step2Content.classList.add('hidden');
+
+            col3.className = 'wireframe-box rounded-lg p-5 flex flex-col relative shadow-sm opacity-60 pointer-events-none transition-all duration-500';
+            badge3.className = 'absolute top-0 right-0 bg-gray-200 text-gray-500 text-xs font-bold px-3 py-1 border-b-2 border-l-2 border-gray-400 rounded-bl-lg transition-colors';
+            title3.className = 'font-bold text-lg border-b-2 border-gray-300 pb-3 mb-4 text-gray-400 transition-colors';
+
+            lucide.createIcons();
+        }
+
+        // Initialize App
+        initProfile();
+    </script>
+</body>
+</html>
